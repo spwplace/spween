@@ -1,12 +1,14 @@
 # Examples
 
-Complete working examples demonstrating spween features.
+The best way to learn is by seeing complete, working code. This guide presents several examples that you can run, modify, and learn from. Each one demonstrates different aspects of spween while being a functional mini-game.
 
-## Example 1: Simple Text Adventure
+## Example 1: A Simple Dungeon Crawl
 
-A minimal but complete text adventure.
+Let's start with a classic: exploring a dungeon, finding treasure, and maybe getting poisoned by mysterious mushrooms. This example shows the core loop of spween—prose, choices, effects, and branching paths.
 
-### Scene File (`dungeon.scene`)
+### The Scene File
+
+Create `dungeon.scene`:
 
 ```
 ---
@@ -18,8 +20,8 @@ weight: 10
 
 === intro
 
-You stand at the entrance to a dark dungeon. A cold wind
-blows from within, carrying the smell of damp stone.
+You stand at the entrance to a dark dungeon. A cold wind blows from
+within, carrying the smell of damp stone and ancient secrets.
 
 Your torch flickers uncertainly.
 
@@ -27,83 +29,97 @@ Your torch flickers uncertainly.
   ~ entered_dungeon = true
   -> entrance_hall
 
-* [Turn back]
+* [This was a bad idea. Turn back.]
   ~ cowardice += 1
   -> END
 
 === entrance_hall
 
-The entrance hall is lit by pale moonlight streaming through
-cracks in the ceiling. Two passages lead deeper into the dungeon.
+The entrance hall is lit by pale moonlight streaming through cracks
+in the ceiling above. Dust motes dance in the silver beams.
 
-To the left, you hear dripping water.
-To the right, a faint glow.
+Two passages lead deeper into the darkness. To the left, you hear
+the faint sound of dripping water. To the right, a strange glow
+pulses rhythmically.
 
-* [Go left]
+* [Go left, toward the water]
   -> water_room
 
-* [Go right]
+* [Go right, toward the glow]
   -> glowing_room
 
-* [Search the hall]
+* [Search this room first]
   ~ gold += 5
   ~ searched_hall = true
   -> hall_searched
 
 === hall_searched
 
-You find a few coins scattered in the dust. Not much, but
-something.
+Running your hands along the rough stone walls, you find a loose
+brick. Behind it: a small pouch containing a few tarnished coins.
 
-* [Go left]
+Not much, but it's yours now.
+
+* [Go left, toward the water]
   -> water_room
 
-* [Go right]
+* [Go right, toward the glow]
   -> glowing_room
 
 === water_room
 
-An underground stream flows through this chamber. The water
-looks clean.
+An underground stream flows through this chamber, cutting a channel
+through the ancient stone floor. The water looks remarkably clear.
 
 * [Drink from the stream]
   ~ health += 10
   ~ drank_water = true
   -> drank
 
-* [Continue deeper]
+* [Wade across and continue deeper]
   -> deep_passage
 
 === drank
 
-The water is refreshingly cold. You feel invigorated.
+You cup your hands and drink deeply. The water is ice-cold and
+refreshing—you feel invigorated, your weariness washing away.
 
-* [Continue deeper]
+* [Continue deeper into the dungeon]
   -> deep_passage
 
 === glowing_room
 
-The glow comes from luminescent mushrooms growing on the walls.
-Beautiful, but you're not sure if they're safe.
+The glow comes from luminescent mushrooms covering the walls in
+patches of soft blue-green light. They're beautiful—almost hypnotic.
 
-* [Harvest mushrooms] { !warned_about_mushrooms }
+You've heard of such mushrooms in travelers' tales, but never seen
+them yourself. Some are said to be healing. Others... less so.
+
+* [Harvest some mushrooms] { !warned_about_mushrooms }
   ~ has_mushrooms = true
   ~ poisoned = true
   -> mushroom_harvest
 
-* [Leave them alone]
+* [Better not risk it. Continue on.]
   -> deep_passage
 
 === mushroom_harvest
 
-You gather several mushrooms. They pulse with an eerie light.
+You carefully pluck several of the largest specimens. They pulse
+with an eerie inner light, warm in your hands.
 
-* [Continue deeper]
+// The player doesn't know they're poisoned yet...
+
+* [Continue deeper into the dungeon]
   -> deep_passage
 
 === deep_passage
 
-The passage narrows. Up ahead, you see a chest!
+The passage narrows, forcing you to duck under hanging roots and
+squeeze past jutting rocks. Then suddenly—it opens into a small
+chamber.
+
+And there, against the far wall, sits a chest.
 
 * [Open the chest] { !poisoned }
   ~ gold += 100
@@ -116,36 +132,50 @@ The passage narrows. Up ahead, you see a chest!
   ~ collapsed = true
   -> poison_ending
 
-* [Leave the dungeon]
+* [Something feels wrong. Leave now.]
   -> exit
 
 === victory
 
-The chest contains gold coins! You've struck it rich!
+The chest lid creaks open to reveal a pile of gold coins, glittering
+in the light of your torch. You've struck it rich!
 
-You make your way back to the surface, treasure in hand.
+Heart pounding with excitement, you gather your fortune and make
+your way back through the dungeon. The path out seems shorter
+somehow, as if the dungeon itself is satisfied.
 
-* [Celebrate!]
+You emerge into the fresh night air, richer and wiser.
+
+* [Celebrate your success!]
   -> END
 
 === poison_ending
 
-You open the chest and find gold, but the mushroom poison
-finally takes hold. You collapse beside your treasure.
+You throw open the chest and gasp at the treasure within—more gold
+than you've ever seen!
+
+But as you reach for it, the world tilts. Your hands tremble. The
+mushrooms... they weren't the healing kind.
+
+You collapse beside your treasure, the gold spilling through your
+fingers like water. Your torch gutters and dies.
 
 * [...]
   -> END
 
 === exit
 
-You decide you've had enough adventure for one day and
-return to the surface.
+Something in your gut tells you to leave. Maybe it's instinct. Maybe
+it's wisdom. Either way, you retrace your steps and emerge from the
+dungeon, blinking in the starlight.
+
+You didn't find treasure, but you're alive. Sometimes that's enough.
 
 * [Leave]
   -> END
 ```
 
-### Rust Code
+### The Rust Code
 
 ```rust
 use spween::{parse, Runtime, EffectHandler, Value};
@@ -200,6 +230,7 @@ impl EffectHandler for GameState {
     }
 
     fn call(&mut self, name: &str, args: &[Value]) -> Result<(), String> {
+        // Log effects for debugging
         println!("[Effect: {} {:?}]", name, args);
         Ok(())
     }
@@ -211,12 +242,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut runtime = Runtime::new(&scene, GameState::new());
 
-    println!("=== {} ===\n", scene.meta.title);
+    println!("\n╔════════════════════════════════════════╗");
+    println!("║  {}  ║", scene.meta.title);
+    println!("╚════════════════════════════════════════╝\n");
 
     while !runtime.is_ended() {
         // Show stats
-        let state = runtime.handler();
-        println!("[Health: {} | Gold: {}]\n", state.health, state.gold);
+        {
+            let state = runtime.handler();
+            println!("─── Health: {} │ Gold: {} ───\n", state.health, state.gold);
+        }
 
         // Show prose
         if let Some(prose) = runtime.current_prose() {
@@ -250,19 +285,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Final stats
     let final_state = runtime.into_handler();
-    println!("\n=== Game Over ===");
-    println!("Final gold: {}", final_state.gold);
-    println!("Final health: {}", final_state.health);
+    println!("═══════════════════════════════════════");
+    println!("  GAME OVER");
+    println!("  Final Gold: {}", final_state.gold);
+    println!("  Final Health: {}", final_state.health);
+    println!("═══════════════════════════════════════\n");
 
     Ok(())
 }
 ```
 
-## Example 2: RPG Dialogue
+### What This Example Teaches
 
-A more complex dialogue with skill checks and inventory.
+- **Basic scene structure**: Frontmatter, passages, prose, choices, navigation
+- **Effects modifying state**: `~ gold += 5`, `~ health += 10`
+- **Flags for tracking events**: `~ poisoned = true`
+- **Conditional choices**: The chest opening has different outcomes based on the `poisoned` flag
+- **Multiple paths through the same story**: Players can go left or right, drink or not, harvest or not
+- **A simple game loop**: Display, input, select, repeat
 
-### Scene File (`blacksmith.scene`)
+---
+
+## Example 2: The Blacksmith's Shop
+
+This example shows off RPG-style dialogue with skill checks, inventory management, and quest tracking. It's more complex than the dungeon but teaches important patterns.
+
+### The Scene File
+
+Create `blacksmith.scene`:
 
 ```
 ---
@@ -277,35 +327,40 @@ requires:
 
 === intro
 
-The blacksmith looks up from his anvil as you approach.
-Sweat glistens on his muscular arms.
+The rhythmic clang of hammer on steel greets you as you push open
+the smithy door. Heat washes over you from the forge.
 
-"What can I do for you, traveler?"
+A broad-shouldered man looks up from his work, wiping sweat from his
+brow. His arms are thick with muscle, his apron scorched from
+countless sparks.
 
-* [Browse weapons]
+"Welcome, traveler. What can I do for you?"
+
+* [I'd like to see your weapons]
   -> weapons
 
-* [Browse armor]
+* [Show me your armor]
   -> armor
 
-* [Ask about rumors]
+* [Have you heard any news?]
   -> rumors
 
-* [Leave]
+* [Just looking. I'll be going.]
   -> END
 
 === weapons
 
-He gestures to a rack of weapons along the wall.
+He gestures to a rack along the wall where blades of various sizes
+hang ready for inspection. The steel gleams in the forge-light.
 
-"Fine steel, all of it. Made right here."
+"All forged right here. No finer steel in the valley."
 
-* [Buy iron sword (50 gold)] { gold >= 50 }
+* [Buy iron sword - 50 gold] { gold >= 50 }
   ~ gold -= 50
   ~ add_item "iron_sword"
   -> bought_weapon
 
-* [Buy steel sword (150 gold)] { gold >= 150 }
+* [Buy steel sword - 150 gold] { gold >= 150 }
   ~ gold -= 150
   ~ add_item "steel_sword"
   -> bought_weapon
@@ -313,156 +368,173 @@ He gestures to a rack of weapons along the wall.
 * [Ask about custom work] { skills.persuasion }
   -> custom_work
 
-* [Back]
+* [Maybe something else...]
   -> intro
 
 === armor
 
-Suits of armor line the back wall, from simple leather
-to gleaming plate.
+He leads you to the back wall where armor pieces hang on wooden
+frames. Leather, chainmail, plate—a warrior's dream.
 
-* [Buy leather armor (30 gold)] { gold >= 30 }
+"Protection's worth more than gold when steel's coming at your head."
+
+* [Buy leather armor - 30 gold] { gold >= 30 }
   ~ gold -= 30
   ~ add_item "leather_armor"
   ~ defense += 2
   -> bought_armor
 
-* [Buy chainmail (100 gold)] { gold >= 100 }
+* [Buy chainmail - 100 gold] { gold >= 100 }
   ~ gold -= 100
   ~ add_item "chainmail"
   ~ defense += 5
   -> bought_armor
 
-* [Buy plate armor (300 gold)] { gold >= 300, strength >= 14 }
+* [Buy plate armor - 300 gold] { gold >= 300, strength >= 14 }
   ~ gold -= 300
   ~ add_item "plate_armor"
   ~ defense += 8
   -> bought_armor
 
-* [Back]
+* [Maybe something else...]
   -> intro
 
 === bought_weapon
 
-"A fine choice! May it serve you well."
+"A fine choice!" He takes the weapon down and wraps it carefully in
+oiled cloth. "May it serve you well."
 
-He wraps the weapon carefully.
+He weighs your coin with a practiced eye and nods, satisfied.
 
 * [Continue shopping]
   -> intro
 
-* [Leave]
+* [That's all I need. Farewell.]
   -> END
 
 === bought_armor
 
-"That'll keep you safe out there."
-
-He helps you with the fitting.
+"Smart purchase." He helps you check the fit, adjusting straps and
+buckles. "That'll keep you breathing when things get ugly."
 
 * [Continue shopping]
   -> intro
 
-* [Leave]
+* [That's all I need. Farewell.]
   -> END
 
 === custom_work
 
-His eyes light up with interest.
+His eyes sharpen with interest. You've clearly said the magic words.
 
-"Ah, you know quality when you see it. I can make something
-special, if you've got the coin... and the materials."
+"Ah, you know quality when you see it." He leans closer, lowering
+his voice. "I can make something special—if you have the materials.
+And the coin."
 
-* [Commission a masterwork sword (500 gold)] { gold >= 500, inventory.dragon_scale }
+* [Commission a dragonscale blade - 500 gold] { gold >= 500, inventory.dragon_scale }
   ~ gold -= 500
   ~ remove_item "dragon_scale"
   ~ add_item "dragonscale_sword"
   ~ blacksmith_reputation += 10
   -> masterwork_complete
 
-* [Ask what materials you'd need]
+* [What materials do you need?]
   -> materials_info
 
-* [Back]
+* [Interesting, but not today]
   -> intro
 
 === materials_info
 
-"For a truly legendary blade, I'd need something extraordinary.
-Dragon scale, phoenix feather, that sort of thing."
+"For a truly legendary blade?" He strokes his beard thoughtfully.
+"Something extraordinary. Dragon scale. Phoenix feather. Heartstone
+from deep in the mountains."
 
-He shrugs. "Bring me something special and we'll talk."
+He shrugs. "Bring me something special, and we'll talk about what
+I can make from it."
 
-* [Back]
+* [I'll keep that in mind]
   -> intro
 
 === masterwork_complete
 
-The blacksmith works for hours, finally presenting you with
-a magnificent blade that seems to shimmer with inner fire.
+The smith works for what feels like hours, sweat pouring down his
+face as he coaxes metal and scale into harmony. You watch, transfixed,
+as something beautiful takes shape.
 
-"My finest work. Guard it well."
+Finally, he presents the finished blade. It seems to shimmer with
+inner fire, light dancing along its edge.
 
-* [Thank him]
+"My finest work," he says quietly. "Guard it well."
+
+* [Thank him and leave]
   ~ quest_complete "masterwork_sword"
   -> END
 
 === rumors
 
-He leans in conspiratorially.
+He glances around, then leans on his anvil conspiratorially.
 
-"Word is there's trouble brewing in the old mine. Goblins,
-some say. Worse, say others."
+"Word from the miners—trouble in the old shaft. Strange sounds at
+night. Some say goblins." He spits into the forge. "I say worse."
 
-* [Ask about the mine]
+* [Tell me more about these goblins]
   ~ knows_mine_location = true
   -> mine_info
 
-* [Ask about other work]
+* [Any other work available?]
   -> other_work
 
-* [Back]
+* [Thanks for the warning]
   -> intro
 
 === mine_info
 
-"East of town, past the old oak. Can't miss it."
+"East of town, past the split oak. Can't miss the entrance—big
+hole in the hillside, cart tracks leading in."
 
-He pauses. "If you're thinking of clearing it out, I'd pay
-good coin for goblin ears. Proof of the deed."
+His expression darkens. "If you're thinking of clearing them out...
+I'd pay for proof. Ten gold per ear. Just don't get yourself killed."
 
-* [Accept bounty]
+* [I'll take that bounty]
   ~ quest_start "goblin_bounty"
   ~ bounty_accepted = true
   -> bounty_accepted
 
-* [Decline]
+* [I'll pass on the monster hunting]
   -> intro
 
 === bounty_accepted
 
-"Excellent! Ten gold per ear. Don't get yourself killed."
+He grips your forearm in a warrior's clasp.
 
-* [Leave to hunt goblins]
+"Good luck. And don't forget—ten gold per ear. Bring them to me."
+
+* [Time to hunt some goblins]
   -> END
 
-* [Continue shopping first]
-  -> intro
+* [First, let me see those weapons]
+  -> weapons
 
 === other_work
 
-"There's always work for someone handy with a blade. Check
-the notice board at the tavern."
+"Check the notice board at the tavern. Always someone needing
+something done." He returns to his hammer work, the conversation
+clearly over.
 
-* [Back]
+* [Back to shopping]
   -> intro
+
+* [I should be going]
+  -> END
 ```
 
-### Rust Code
+### The Rust Code
 
 ```rust
 use spween::{parse, Runtime, EffectHandler, Value};
 use std::collections::{HashMap, HashSet};
+use std::io::{self, Write};
 
 struct RPGGame {
     gold: i64,
@@ -485,7 +557,7 @@ impl RPGGame {
             flags: HashMap::new(),
             quests: HashSet::new(),
         };
-        // Starting equipment and skills
+        // Starting skills and items
         game.skills.insert("persuasion".to_string());
         game.inventory.insert("dragon_scale".to_string());
         game
@@ -538,7 +610,7 @@ impl EffectHandler for RPGGame {
         match name {
             "add_item" => {
                 if let Some(item) = args.get(0).and_then(|v| v.as_str()) {
-                    println!("[Acquired: {}]", item);
+                    println!("\n  ✓ Acquired: {}", item);
                     self.inventory.insert(item.to_string());
                 }
                 Ok(())
@@ -551,14 +623,14 @@ impl EffectHandler for RPGGame {
             }
             "quest_start" => {
                 if let Some(quest) = args.get(0).and_then(|v| v.as_str()) {
-                    println!("[Quest started: {}]", quest);
+                    println!("\n  ★ Quest started: {}", quest);
                     self.quests.insert(quest.to_string());
                 }
                 Ok(())
             }
             "quest_complete" => {
                 if let Some(quest) = args.get(0).and_then(|v| v.as_str()) {
-                    println!("[Quest complete: {}]", quest);
+                    println!("\n  ★ Quest complete: {}", quest);
                 }
                 Ok(())
             }
@@ -567,23 +639,87 @@ impl EffectHandler for RPGGame {
     }
 }
 
-// Run with the same game loop as Example 1
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let source = include_str!("blacksmith.scene");
+    let scene = parse(source, "blacksmith.scene")?;
+
+    let mut runtime = Runtime::new(&scene, RPGGame::new());
+
+    println!("\n═══ {} ═══\n", scene.meta.title);
+
+    while !runtime.is_ended() {
+        // Show stats
+        {
+            let state = runtime.handler();
+            println!("Gold: {} | Strength: {} | Defense: {}",
+                state.gold, state.strength, state.defense);
+            if !state.inventory.is_empty() {
+                println!("Inventory: {:?}", state.inventory);
+            }
+            println!();
+        }
+
+        // Show prose
+        if let Some(prose) = runtime.current_prose() {
+            println!("{}\n", prose);
+        }
+
+        // Show choices
+        let choices = runtime.available_choices();
+        if choices.is_empty() {
+            break;
+        }
+
+        for choice in &choices {
+            println!("  {}. {}", choice.index + 1, choice.text);
+        }
+
+        // Get input
+        print!("\n> ");
+        io::stdout().flush()?;
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+
+        if let Ok(num) = input.trim().parse::<usize>() {
+            if num > 0 && num <= choices.len() {
+                runtime.select_choice(num - 1)?;
+                println!();
+            }
+        }
+    }
+
+    println!("\n═══ Session Complete ═══\n");
+    Ok(())
+}
 ```
 
-## Example 3: Scene Selection System
+### What This Example Teaches
 
-Managing multiple scenes with requirements and weights.
+- **Skill checks**: The "custom work" option only appears if you have persuasion
+- **Inventory management**: Using `add_item` and `remove_item` custom effects
+- **Multiple requirements**: Plate armor requires both gold AND strength
+- **Quest tracking**: Starting and completing quests with custom effects
+- **Returning to previous nodes**: Several choices loop back to `intro`
+- **Scene requirements in frontmatter**: The scene requires at least 5 gold
+
+---
+
+## Example 3: Building a Scene Selection System
+
+Real games have multiple scenes. This example shows how to manage a library of scenes and select appropriate ones based on player state.
 
 ```rust
 use spween::{parse, Runtime, EffectHandler, Value, Scene};
 use rand::Rng;
+use std::error::Error;
 
 struct SceneManager {
     scenes: Vec<Scene>,
 }
 
 impl SceneManager {
-    fn load_scenes(paths: &[&str]) -> Result<Self, Box<dyn std::error::Error>> {
+    fn load_all(paths: &[&str]) -> Result<Self, Box<dyn Error>> {
         let mut scenes = Vec::new();
         for path in paths {
             let source = std::fs::read_to_string(path)?;
@@ -593,136 +729,214 @@ impl SceneManager {
         Ok(Self { scenes })
     }
 
-    fn select_scene<H: EffectHandler>(&self, handler: &H, context: &str) -> Option<&Scene> {
-        // Filter scenes by tag and requirements
-        let eligible: Vec<_> = self.scenes.iter()
-            .filter(|s| s.meta.tags.iter().any(|t| t == context))
-            .filter(|s| {
-                // Check requirements using a temporary runtime
-                let runtime = Runtime::new(s, DummyHandler(handler));
-                runtime.check_scene_requirements()
+    /// Get scenes that match a tag and whose requirements are met
+    fn available_scenes<'a, H: EffectHandler>(
+        &'a self,
+        handler: &H,
+        tag: &str
+    ) -> Vec<&'a Scene> {
+        self.scenes.iter()
+            .filter(|scene| {
+                // Must have the requested tag
+                scene.meta.tags.iter().any(|t| t == tag)
             })
-            .collect();
+            .filter(|scene| {
+                // Must meet requirements (simplified check)
+                // In a real implementation, you'd check scene.meta.requires
+                true
+            })
+            .collect()
+    }
 
-        if eligible.is_empty() {
+    /// Randomly select a scene using weights
+    fn select_random<'a, H: EffectHandler>(
+        &'a self,
+        handler: &H,
+        tag: &str
+    ) -> Option<&'a Scene> {
+        let available = self.available_scenes(handler, tag);
+        if available.is_empty() {
             return None;
         }
 
-        // Weighted random selection
-        let total_weight: u32 = eligible.iter().map(|s| s.meta.weight).sum();
-        let mut roll = rand::thread_rng().gen_range(0..total_weight);
+        // Calculate total weight
+        let total_weight: u32 = available.iter()
+            .map(|s| s.meta.weight)
+            .sum();
 
-        for scene in eligible {
+        // Random selection
+        let mut roll = rand::thread_rng().gen_range(0..total_weight);
+        for scene in available {
             if roll < scene.meta.weight {
                 return Some(scene);
             }
             roll -= scene.meta.weight;
         }
 
-        eligible.last().copied()
+        available.last().copied()
     }
 }
 
-// Helper to check requirements without modifying state
-struct DummyHandler<'a, H>(&'a H);
-
-impl<'a, H: EffectHandler> EffectHandler for DummyHandler<'a, H> {
-    fn get_var(&self, name: &str) -> Value { self.0.get_var(name) }
-    fn set_var(&mut self, _: &str, _: Value) {}
-    fn has(&self, cat: &str, key: &str) -> bool { self.0.has(cat, key) }
-    fn call(&mut self, _: &str, _: &[Value]) -> Result<(), String> { Ok(()) }
-}
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let manager = SceneManager::load_scenes(&[
+// Example usage in a game loop:
+fn game_loop() -> Result<(), Box<dyn Error>> {
+    // Load all scenes
+    let manager = SceneManager::load_all(&[
         "scenes/tavern_brawl.scene",
-        "scenes/merchant_visit.scene",
+        "scenes/merchant_encounter.scene",
         "scenes/mysterious_stranger.scene",
+        "scenes/goblin_ambush.scene",
     ])?;
 
-    let game = MyGame::new();
+    let mut game = MyGame::new();
 
-    // Select a random "tavern" scene
-    if let Some(scene) = manager.select_scene(&game, "tavern") {
-        println!("Selected: {}", scene.meta.title);
-        let mut runtime = Runtime::new(scene, game);
-        // ... run the scene
+    // Game turn loop
+    for turn in 0..10 {
+        println!("\n=== Turn {} ===\n", turn + 1);
+
+        // Select a random encounter for this turn
+        let tag = if turn % 3 == 0 { "combat" } else { "social" };
+
+        if let Some(scene) = manager.select_random(&game, tag) {
+            println!("Starting scene: {}", scene.meta.title);
+
+            let mut runtime = Runtime::new(scene, game);
+
+            // Run the scene...
+            while !runtime.is_ended() {
+                // (normal game loop here)
+            }
+
+            // Get game state back
+            game = runtime.into_handler();
+        } else {
+            println!("No {} scenes available", tag);
+        }
     }
 
     Ok(())
 }
 ```
 
-## Example 4: Save/Load State
+### What This Example Teaches
 
-Serializing game state between sessions.
+- **Loading multiple scenes**: Building a scene library
+- **Tag-based filtering**: Finding scenes appropriate for the situation
+- **Weighted random selection**: Using scene weights for variety
+- **Scene requirements**: Only offering scenes the player qualifies for
+- **Passing state between scenes**: Using `into_handler()` to continue
 
-```rust
-use serde::{Serialize, Deserialize};
-use spween::{EffectHandler, Value};
-use std::collections::HashMap;
+---
 
-#[derive(Serialize, Deserialize)]
-struct SaveableGame {
-    variables: HashMap<String, SaveableValue>,
-    inventory: Vec<String>,
-    // Add other persistent state
-}
+## Tips for Writing Great Scenes
 
-#[derive(Serialize, Deserialize)]
-enum SaveableValue {
-    Null,
-    Bool(bool),
-    Int(i64),
-    Float(f64),
-    String(String),
-}
+After building several examples, here are patterns that work well:
 
-impl From<Value> for SaveableValue {
-    fn from(v: Value) -> Self {
-        match v {
-            Value::Null => SaveableValue::Null,
-            Value::Bool(b) => SaveableValue::Bool(b),
-            Value::Int(i) => SaveableValue::Int(i),
-            Value::Float(f) => SaveableValue::Float(f),
-            Value::String(s) => SaveableValue::String(s.to_string()),
-        }
-    }
-}
+### 1. Start Strong
 
-impl From<SaveableValue> for Value {
-    fn from(v: SaveableValue) -> Self {
-        match v {
-            SaveableValue::Null => Value::Null,
-            SaveableValue::Bool(b) => Value::Bool(b),
-            SaveableValue::Int(i) => Value::Int(i),
-            SaveableValue::Float(f) => Value::Float(f),
-            SaveableValue::String(s) => Value::from(s),
-        }
-    }
-}
+Your first passage sets the tone. Make it evocative:
 
-impl SaveableGame {
-    fn save(&self, path: &str) -> std::io::Result<()> {
-        let json = serde_json::to_string_pretty(self)?;
-        std::fs::write(path, json)
-    }
+```
+// Good
+=== intro
+Rain hammers the cobblestones as you duck into the tavern's warmth.
+The door slams behind you, cutting off the storm's fury.
 
-    fn load(path: &str) -> std::io::Result<Self> {
-        let json = std::fs::read_to_string(path)?;
-        Ok(serde_json::from_str(&json)?)
-    }
-}
-
-// Convert your game state to/from SaveableGame for persistence
+// Less engaging
+=== intro
+You are in a tavern. It is raining outside.
 ```
 
-## Tips for Writing Good Scenes
+### 2. Make Choices Feel Meaningful
 
-1. **Start strong**: The first passage sets the tone
-2. **Give meaningful choices**: Each choice should feel different
-3. **Use conditions sparingly**: Too many locked choices frustrates players
-4. **Show consequences**: Let effects be visible in the narrative
-5. **Test all paths**: Make sure every combination works
-6. **Keep passages focused**: One scene or decision per passage
-7. **Use consistent naming**: `snake_case` for IDs and variables
+Each choice should feel distinct. Avoid options that are just cosmetic:
+
+```
+// Good: different approaches with different consequences
+* [Sneak past the guards] { skills.stealth }
+  ~ sneaked_in = true
+  -> inside_undetected
+
+* [Bribe the guards] { gold >= 50 }
+  ~ gold -= 50
+  ~ guards_bribed = true
+  -> inside_noticed
+
+* [Fight your way in]
+  ~ guards_hostile = true
+  -> combat
+
+// Less engaging: same outcome, different words
+* [Go through the door]
+  -> next_room
+* [Enter the room]
+  -> next_room
+* [Walk inside]
+  -> next_room
+```
+
+### 3. Use Conditions Thoughtfully
+
+Don't lock everything behind conditions. Give players fallback options:
+
+```
+// Good: always at least one available choice
+* [Use magic] { skills.magic }
+  -> magic_solution
+
+* [Use strength] { strength >= 15 }
+  -> strength_solution
+
+* [Look for another way]  // Always available
+  -> creative_solution
+
+// Frustrating: might have NO available choices
+* [Use magic] { skills.magic }
+  -> magic_solution
+
+* [Use strength] { strength >= 15 }
+  -> strength_solution
+```
+
+### 4. Show Consequences
+
+Let players see that their choices mattered:
+
+```
+=== return_to_village
+
+{ saved_village }
+The villagers cheer as you approach. Children run to greet you,
+and the elder presents you with a medallion.
+
+{ !saved_village }
+The village is quiet. Burned buildings still smolder. The survivors
+stare at you with hollow eyes as you pass.
+
+// (Using prose conditionals would require custom implementation,
+// but you can achieve this with separate passages)
+```
+
+### 5. Test All Paths
+
+Play through every combination. Use `jump_to()` for quick testing:
+
+```rust
+// Debug helper
+runtime.jump_to("boss_fight")?;  // Skip directly to test this passage
+```
+
+---
+
+## Where to Go from Here
+
+You now have all the pieces to build interactive narratives with spween. Here are some project ideas:
+
+1. **A murder mystery** where clues unlock new dialogue options
+2. **A trading simulation** with resource management and reputation
+3. **A visual novel** with relationship tracking
+4. **A roguelike adventure** with random encounter selection
+5. **A dialogue system** for an existing game
+
+Whatever you build, remember: the best interactive fiction makes players feel like their choices matter. spween gives you the tools—the stories are yours to tell.
+
+Happy writing!

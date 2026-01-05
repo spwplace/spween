@@ -1,24 +1,30 @@
 # DSL Syntax Reference
 
-Complete reference for the spween scene file format.
+This guide covers everything you can write in a spween scene file. Think of it as your complete reference—bookmark it and come back whenever you need to look something up.
 
-## File Structure
+## The Shape of a Scene File
 
-A spween scene file has two parts:
+Every spween scene has the same basic structure:
 
 ```
 ---
-[frontmatter]
+[frontmatter - metadata about the scene]
 ---
 
-[passages]
+[passages - the actual content]
 ```
+
+The frontmatter tells spween *about* your scene (its ID, title, requirements). The passages contain the actual narrative content—the prose, choices, and effects that make up your interactive story.
+
+Let's explore each part in detail.
 
 ## Frontmatter
 
-YAML metadata between `---` delimiters.
+The frontmatter section sits between two `---` delimiters at the very top of your file. It uses YAML format for structured metadata.
 
-### Required Fields
+### The Required Fields
+
+Every scene needs at least these two fields:
 
 ```yaml
 ---
@@ -27,12 +33,14 @@ title: Human Readable Title
 ---
 ```
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | string | Unique identifier, used for scene selection |
-| `title` | string | Display name for the scene |
+| Field | What It's For |
+|-------|---------------|
+| `id` | A unique identifier used by your code to reference this scene. Use `snake_case`—no spaces, just lowercase letters, numbers, and underscores. |
+| `title` | A nice name for humans to read. This might appear in scene selection menus or save files. Spaces and special characters are fine here. |
 
 ### Optional Fields
+
+You can add more metadata to control how your scene behaves:
 
 ```yaml
 ---
@@ -47,16 +55,16 @@ requires:
 ---
 ```
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `tags` | list | `[]` | Categories for filtering scenes |
-| `weight` | int | `10` | Selection probability weight |
-| `cooldown` | int | `5` | Minimum turns before scene can repeat |
-| `requires` | object | none | Preconditions (see [Conditions](03-conditions.md)) |
+| Field | Default | What It Does |
+|-------|---------|--------------|
+| `tags` | `[]` | Categories for filtering scenes. Your code can say "give me a random scene with the `tavern` tag." |
+| `weight` | `10` | Selection probability when randomly choosing between scenes. Higher = more likely to be picked. |
+| `cooldown` | `5` | How many "turns" (however you define them) before this scene can repeat. Prevents the same scene from appearing too often. |
+| `requires` | none | Preconditions that must be met before this scene can be selected. See [Conditions](03-conditions.md) for the full syntax. |
 
 ### Custom Fields
 
-Any additional YAML fields are stored in `scene.meta.custom`:
+Need to store extra information? Any YAML fields beyond the standard ones get preserved in `scene.meta.custom`:
 
 ```yaml
 ---
@@ -64,96 +72,124 @@ id: my_scene
 title: My Scene
 author: Jane Doe
 difficulty: hard
+mood: tense
 ---
 ```
 
-Access in code:
+In your code:
 ```rust
 for (key, value) in &scene.meta.custom {
     println!("{}: {}", key, value);
+    // Prints: author: Jane Doe, difficulty: hard, mood: tense
 }
 ```
 
+This is handy for editor tooling, debugging, or any game-specific metadata you want to track.
+
 ## Passages
 
-Passages are named sections containing prose and choices.
+After the frontmatter comes the heart of your scene: passages. Each passage is a named section that can contain prose, choices, and effects.
 
-### Basic Passage
+### Creating a Passage
 
 ```
 === passage_name
 
-Prose content goes here. This can span
-multiple lines and paragraphs.
-
-More prose after a blank line.
+Content goes here...
 ```
 
-- Passage names must be valid identifiers: `[a-zA-Z_][a-zA-Z0-9_]*`
-- The first passage is the entry point
-- Common convention: name the first passage `intro`
+The `===` marker starts a new passage. The name that follows must be a valid identifier—letters, numbers, and underscores, starting with a letter or underscore.
 
-### Prose
+**Important:** The first passage in your file is the entry point. When a player starts the scene, they begin there. By convention, most scene authors name it `intro`, but you can call it whatever you like.
 
-Any text that isn't a choice, effect, or navigation becomes prose:
+### What Goes in a Passage
 
-```
-=== intro
+A passage can contain:
+- **Prose** — Narrative text shown to the player
+- **Choices** — Decision points with `*`
+- **Effects** — State changes with `~`
+- **Navigation** — Jumps with `->`
+- **Comments** — Notes to yourself with `//`
 
-This is prose. It's the narrative text shown to the player.
+Let's look at each one.
 
-You can have multiple paragraphs. Blank lines are preserved
-in the output.
+## Prose
 
-Numbers like 42 and punctuation work fine!
-```
-
-### Comments
-
-Lines starting with `//` are comments:
+Any text that isn't a special marker becomes prose—the narrative content your player reads:
 
 ```
 === intro
 
-// This won't appear in the output
-The player sees this.
+This is prose. It's the story text, the dialogue, the descriptions—
+everything the player reads.
 
-// TODO: add more flavor text
+You can have multiple paragraphs. Blank lines between them are
+preserved in the output.
+
+Numbers like 42 and punctuation work just fine!
+Even "quoted text" appears as you'd expect.
 ```
+
+Prose is straightforward: write what you want the player to see.
+
+## Comments
+
+Sometimes you want to leave notes for yourself (or other writers) that won't appear in the game:
+
+```
+=== intro
+
+// This is a comment - players never see it
+The player sees this text.
+
+// TODO: add more atmospheric description here
+// NOTE: this passage leads to the boss fight
+```
+
+Lines starting with `//` are ignored during parsing. Use them freely to annotate your scenes.
 
 ## Choices
 
-Choices let the player make decisions.
+Choices are what make your narrative interactive. They give players agency—a chance to shape the story.
 
-### Basic Choice
+### Basic Choice Syntax
 
 ```
-* [Choice text]
+* [Choice text goes here]
   -> target_passage
 ```
 
-- `*` marks a choice
-- `[text]` is displayed to the player
-- `-> target` navigates on selection
+- The `*` marks this line as a choice
+- Text in `[brackets]` is what the player sees
+- The `-> target` line (indented underneath) specifies where to go when selected
 
 ### Multiple Choices
+
+Most passages offer several options:
 
 ```
 === intro
 
-What do you do?
+You stand at a crossroads. Three paths stretch before you.
 
-* [Go north]
+* [Take the northern path]
   -> north
 
-* [Go south]
+* [Take the eastern path]
+  -> east
+
+* [Take the southern path]
   -> south
 
-* [Stay here]
-  -> END
+* [Sit down and rest]
+  -> rest
 ```
 
-### Choice with Effects
+Players will see all choices and pick one.
+
+### Choices with Effects
+
+Choices become more interesting when they *do* things:
 
 ```
 * [Buy the sword]
@@ -162,76 +198,96 @@ What do you do?
   -> shop_complete
 ```
 
-Effects execute before navigation. See [Effects](04-effects.md).
+Here, selecting "Buy the sword" subtracts 50 gold, sets a flag, and then navigates to the next passage. Effects (the `~` lines) execute before navigation.
+
+We'll cover effects in detail in [Effects](04-effects.md).
 
 ### Conditional Choices
 
+Some choices should only appear (or be selectable) under certain circumstances:
+
 ```
-* [Use lockpick] { skills.lockpicking }
+* [Use your lockpick] { skills.lockpicking }
   -> unlocked
 
-* [Force the door] when strength >= 15
+* [Force the door open] { strength >= 15 }
   ~ door_broken = true
-  -> forced
+  -> forced_open
+
+* [Look for another way in]
+  -> search_around
 ```
 
-Two syntax options:
-- `{ condition }` - Brace syntax
-- `when condition` - Keyword syntax
+The `{ condition }` syntax specifies requirements. The first choice only appears if the player has the lockpicking skill. The second requires strength of at least 15.
 
-See [Conditions](03-conditions.md).
-
-### Choice without Navigation
-
-If no `->` is specified, the scene ends after the choice:
+There's also a `when` keyword syntax that some authors prefer:
 
 ```
-* [Leave]
+* [Force the door open] when strength >= 15
+  -> forced_open
+```
+
+Both forms work identically. See [Conditions](03-conditions.md) for the full condition syntax.
+
+### Choices Without Navigation
+
+If a choice doesn't specify a `->` target, the scene ends after selecting it:
+
+```
+* [Walk away forever]
   ~ left_early = true
-  // Scene ends here
+  // No -> here, so the scene ends
 ```
 
 ## Navigation
 
-### Jump to Passage
+Navigation controls the flow between passages.
+
+### Jumping to a Passage
 
 ```
 -> passage_name
 ```
 
-### End Scene
+This takes the player to the named passage. You can use it inside choices (the common case) or on its own in a passage.
+
+### Ending the Scene
 
 ```
 -> END
 ```
 
-`END` is a special target that ends the scene.
+`END` is a special target that finishes the scene. The runtime's `is_ended()` method will return `true`.
 
-### Navigation in Choices
+### Navigation Placement
 
-Navigation is typically the last line of a choice:
+Navigation is typically the last thing in a choice:
 
 ```
-* [Enter the cave]
-  ~ explored_cave = true
-  ~ torches -= 1
-  -> cave_entrance
+* [Enter the mysterious cave]
+  ~ explored_cave = true    // Effect 1
+  ~ torches -= 1            // Effect 2
+  -> cave_entrance          // Then navigate
 ```
+
+Effects run first, in order, then navigation happens.
 
 ## Indentation
 
-Effects and navigation under a choice should be indented:
+Indentation groups effects and navigation under their choice. Use either 2 spaces or 1 tab—just be consistent within a file:
 
 ```
-* [Choice text]
+* [This is the choice text]
   ~ effect_one = true
   ~ effect_two = true
-  -> target
+  -> target_passage
 ```
 
-Indentation uses 2 spaces or 1 tab. Consistency within a file is recommended.
+The indented lines belong to the choice above them.
 
-## Complete Example
+## A Complete Example
+
+Let's put it all together with a realistic scene:
 
 ```
 ---
@@ -246,10 +302,11 @@ requires:
 
 === intro
 
-A merchant's wagon blocks the road ahead. The driver waves
-as you approach.
+A merchant's wagon blocks the road ahead. Colorful fabrics and
+glinting trinkets catch your eye. The driver notices your interest
+and waves with a friendly smile.
 
-"Fine goods for sale! Take a look?"
+"Fine goods for sale, traveler! Care to take a look?"
 
 * [Browse the wares]
   -> browse
@@ -263,11 +320,12 @@ as you approach.
 
 === browse
 
-The merchant displays their goods:
+The merchant spreads out their goods with practiced flair:
 - Health potion: 25 gold
 - Map fragment: 50 gold
 - Lucky charm: 100 gold
 
+// Note: these choices only appear if player can afford them
 * [Buy health potion] { gold >= 25 }
   ~ gold -= 25
   ~ has_potion = true
@@ -283,25 +341,67 @@ The merchant displays their goods:
   ~ luck += 1
   -> bought
 
-* [Nothing, thanks]
+* [Nothing catches my eye]
   -> END
 
 === bought
 
-"Pleasure doing business!" The merchant tips their hat.
+"Pleasure doing business!" The merchant tips their hat with a grin.
 
-* [Continue]
+* [Continue on your way]
   -> END
 
 === ask_road
 
-"Bandits about three miles north. Stick to the forest
-path if you want to avoid them."
+"Bandits about three miles north. Nasty bunch." The merchant lowers
+their voice. "But if you stick to the forest path, you can avoid them
+entirely. Just watch for the old oak—turn east there."
 
 * [Thank them and leave]
   ~ knows_bandit_location = true
   -> END
 
-* [Browse wares]
+* [Maybe I'll browse those wares first]
   -> browse
 ```
+
+This scene demonstrates:
+- Frontmatter with tags, weight, cooldown, and requirements
+- Multiple passages with different purposes
+- Conditional choices that check player gold
+- Effects that modify game state
+- Navigation between passages and to END
+- Comments explaining the author's intent
+
+## Quick Reference
+
+```
+---                           # Start frontmatter
+id: scene_id                  # Required: unique identifier
+title: Display Name           # Required: human-readable name
+tags: [tag1, tag2]            # Optional: categories
+weight: 10                    # Optional: selection probability
+cooldown: 5                   # Optional: turns before repeat
+requires:                     # Optional: preconditions
+  min: { var: value }
+  has: [category.key]
+---                           # End frontmatter
+
+=== passage_name              # Start a passage
+
+Prose text here.              # Narrative content
+
+// This is a comment          # Not shown to players
+
+* [Choice text]               # A choice
+  ~ variable = value          # Effect (optional, can have multiple)
+  -> target                   # Navigation (optional)
+
+* [Another choice] { cond }   # Conditional choice
+  -> somewhere
+
+-> passage_name               # Direct navigation
+-> END                        # End the scene
+```
+
+You now know everything about spween's syntax. Next, let's dive deeper into [Conditions](03-conditions.md) to make your choices truly dynamic.

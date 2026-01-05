@@ -88,13 +88,16 @@ pub struct Runtime<'scene, H: EffectHandler> {
     handler: H,
     state: RuntimeState,
     passage_index: std::collections::HashMap<SmolStr, usize>,
+    /// Tracks which passage index we've executed entry effects for (to avoid re-running)
+    effects_executed_for: Option<usize>,
 }
 
 impl<'scene, H: EffectHandler> Runtime<'scene, H> {
     /// Create a new runtime for the given scene.
     ///
     /// Starts at the first passage (usually "intro").
-    pub fn new(scene: &'scene Scene, handler: H) -> Self {
+    /// Returns an error if the initial passage's effects fail to execute.
+    pub fn new(scene: &'scene Scene, handler: H) -> Result<Self, RuntimeError> {
         let passage_index: std::collections::HashMap<SmolStr, usize> = scene
             .passages
             .iter()
@@ -102,7 +105,7 @@ impl<'scene, H: EffectHandler> Runtime<'scene, H> {
             .map(|(i, p)| (p.name.clone(), i))
             .collect();
 
-        Self {
+        let mut runtime = Self {
             scene,
             handler,
             state: if scene.passages.is_empty() {
@@ -111,7 +114,13 @@ impl<'scene, H: EffectHandler> Runtime<'scene, H> {
                 RuntimeState::Running(0)
             },
             passage_index,
-        }
+            effects_executed_for: None,
+        };
+
+        // Execute entry effects for the initial passage
+        runtime.execute_passage_effects()?;
+
+        Ok(runtime)
     }
 
     /// Get a reference to the effect handler.
@@ -137,6 +146,46 @@ impl<'scene, H: EffectHandler> Runtime<'scene, H> {
     /// Check if the scene has ended.
     pub fn is_ended(&self) -> bool {
         matches!(self.state, RuntimeState::Ended)
+    }
+
+    /// Execute passage-level effects for the current passage (if not already executed).
+    ///
+    /// This is called automatically when entering a new passage.
+    fn execute_passage_effects(&mut self) -> Result<(), RuntimeError> {
+        let RuntimeState::Running(idx) = self.state else {
+            return Ok(());
+        };
+
+        // Skip if we've already executed effects for this passage
+        if self.effects_executed_for == Some(idx) {
+            return Ok(());
+        }
+
+        // Mark as executed before running (to prevent infinite loops if effects cause issues)
+        self.effects_executed_for = Some(idx);
+
+        // Collect effects to execute
+        let effects: Vec<Effect> = self
+            .scene
+            .passages
+            .get(idx)
+            .map(|p| {
+                p.content
+                    .iter()
+                    .filter_map(|c| match c {
+                        PassageContent::Effect(e) => Some(e.clone()),
+                        _ => None,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        // Execute effects
+        for effect in &effects {
+            self.execute_effect(effect)?;
+        }
+
+        Ok(())
     }
 
     /// Get the current passage, if any.
@@ -260,6 +309,9 @@ impl<'scene, H: EffectHandler> Runtime<'scene, H> {
             self.state = RuntimeState::Ended;
         }
 
+        // Execute passage-level effects for the new passage
+        self.execute_passage_effects()?;
+
         Ok(())
     }
 
@@ -277,6 +329,10 @@ impl<'scene, H: EffectHandler> Runtime<'scene, H> {
             .ok_or_else(|| RuntimeError::UnknownPassage(passage_name.to_string()))?;
 
         self.state = RuntimeState::Running(idx);
+
+        // Execute passage-level effects for the new passage
+        self.execute_passage_effects()?;
+
         Ok(())
     }
 
@@ -460,7 +516,7 @@ Hello, world!
         );
 
         let handler = TestHandler::new();
-        let mut runtime = Runtime::new(&scene, handler);
+        let mut runtime = Runtime::new(&scene, handler).unwrap();
 
         assert!(!runtime.is_ended());
         assert_eq!(runtime.current_prose(), Some("Hello, world!".to_string()));
@@ -497,14 +553,14 @@ Choose wisely.
 
         // Without enough gold
         let handler = TestHandler::new().with_var("gold", 50i64);
-        let runtime = Runtime::new(&scene, handler);
+        let runtime = Runtime::new(&scene, handler).unwrap();
         let choices = runtime.current_choices();
         assert!(!choices[0].available);
         assert!(choices[1].available);
 
         // With enough gold
         let handler = TestHandler::new().with_var("gold", 200i64);
-        let runtime = Runtime::new(&scene, handler);
+        let runtime = Runtime::new(&scene, handler).unwrap();
         let choices = runtime.current_choices();
         assert!(choices[0].available);
         assert!(choices[1].available);
@@ -534,13 +590,13 @@ Do you have the key?
 
         // Without key
         let handler = TestHandler::new();
-        let runtime = Runtime::new(&scene, handler);
+        let runtime = Runtime::new(&scene, handler).unwrap();
         let choices = runtime.current_choices();
         assert!(!choices[0].available);
 
         // With key
         let handler = TestHandler::new().with_has("inventory", "key");
-        let runtime = Runtime::new(&scene, handler);
+        let runtime = Runtime::new(&scene, handler).unwrap();
         let choices = runtime.current_choices();
         assert!(choices[0].available);
     }
@@ -568,7 +624,7 @@ Get rewards!
         );
 
         let handler = TestHandler::new().with_var("gold", 50i64);
-        let mut runtime = Runtime::new(&scene, handler);
+        let mut runtime = Runtime::new(&scene, handler).unwrap();
 
         runtime.select_choice(0).unwrap();
 
@@ -606,7 +662,7 @@ You're in the middle.
         );
 
         let handler = TestHandler::new();
-        let mut runtime = Runtime::new(&scene, handler);
+        let mut runtime = Runtime::new(&scene, handler).unwrap();
 
         assert_eq!(
             runtime.current_passage().map(|p| p.name.as_str()),
@@ -622,5 +678,69 @@ You're in the middle.
 
         runtime.select_choice(0).unwrap();
         assert!(runtime.is_ended());
+    }
+
+    #[test]
+    fn test_passage_level_effects() {
+        // This test verifies passage-level effects work correctly (like in combat.scene)
+        let scene = parse_test_scene(
+            r#"---
+id: combat_test
+title: Combat Test
+weight: 10
+cooldown: 5
+---
+
+=== intro
+
+Enemies appear!
+
+~ enemy_health = 30
+~ combat_started = true
+
+* [Attack] { has_weapon }
+  -> fight
+
+* [Run away]
+  -> END
+
+=== fight
+
+You fight!
+
+~ in_combat = true
+
+* [Strike]
+  ~ enemy_health -= 10
+  -> END
+"#,
+        );
+
+        // Without weapon - only "Run away" should be available
+        let handler = TestHandler::new();
+        let runtime = Runtime::new(&scene, handler).unwrap();
+
+        // Passage-level effects should have been executed
+        assert_eq!(runtime.handler().get_var("enemy_health"), Value::Int(30));
+        assert_eq!(runtime.handler().get_var("combat_started"), Value::Bool(true));
+
+        // Should have 2 choices, but only "Run away" is available (no weapon)
+        let choices = runtime.current_choices();
+        assert_eq!(choices.len(), 2);
+        assert!(!choices[0].available); // Attack requires weapon
+        assert!(choices[1].available);  // Run away always available
+
+        // With weapon - both choices available
+        let handler = TestHandler::new().with_var("has_weapon", true);
+        let mut runtime = Runtime::new(&scene, handler).unwrap();
+
+        // Passage effects still executed
+        assert_eq!(runtime.handler().get_var("enemy_health"), Value::Int(30));
+
+        // Navigate to fight passage
+        runtime.select_choice(0).unwrap();
+
+        // Fight passage effects should be executed
+        assert_eq!(runtime.handler().get_var("in_combat"), Value::Bool(true));
     }
 }

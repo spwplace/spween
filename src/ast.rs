@@ -64,6 +64,8 @@ pub enum PassageContent {
     Prose(Prose),
     /// A choice the player can make
     Choice(Choice),
+    /// An effect to execute when the passage is entered
+    Effect(Effect),
 }
 
 /// Narrative text in a passage.

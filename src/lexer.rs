@@ -57,6 +57,18 @@ pub enum RawToken {
     #[token("!")]
     Bang,
 
+    #[token("?")]
+    Question,
+
+    #[token("'")]
+    Apostrophe,
+
+    #[token(";")]
+    Semicolon,
+
+    #[token("-", priority = 1)]
+    Minus,
+
     #[token(">=")]
     Ge,
 
@@ -124,6 +136,10 @@ pub enum Token {
     Colon,
     Dot,
     Bang,
+    Question,
+    Apostrophe,
+    Semicolon,
+    Minus,
     Ge,
     Le,
     EqEq,
@@ -162,6 +178,10 @@ impl std::fmt::Display for Token {
             Token::Colon => write!(f, ":"),
             Token::Dot => write!(f, "."),
             Token::Bang => write!(f, "!"),
+            Token::Question => write!(f, "?"),
+            Token::Apostrophe => write!(f, "'"),
+            Token::Semicolon => write!(f, ";"),
+            Token::Minus => write!(f, "-"),
             Token::Ge => write!(f, ">="),
             Token::Le => write!(f, "<="),
             Token::EqEq => write!(f, "=="),
@@ -197,7 +217,6 @@ pub struct Lexer<'src> {
     inner: SpannedIter<'src, RawToken>,
     indent_stack: Vec<usize>,
     pending_dedents: usize,
-    in_frontmatter: bool,
     pos: usize,
 }
 
@@ -209,7 +228,6 @@ impl<'src> Lexer<'src> {
             inner: RawToken::lexer(source).spanned(),
             indent_stack: vec![0],
             pending_dedents: 0,
-            in_frontmatter: false,
             pos: 0,
         }
     }
@@ -264,13 +282,10 @@ impl Iterator for Lexer<'_> {
         };
 
         match tok {
-            RawToken::FrontmatterDelim => {
-                self.in_frontmatter = !self.in_frontmatter;
-                Some(SpannedToken {
-                    token: Token::FrontmatterDelim,
-                    span,
-                })
-            }
+            RawToken::FrontmatterDelim => Some(SpannedToken {
+                token: Token::FrontmatterDelim,
+                span,
+            }),
 
             RawToken::PassageHeader => {
                 let name = self.read_passage_name();
@@ -364,6 +379,10 @@ impl Iterator for Lexer<'_> {
             RawToken::Colon => Some(SpannedToken { token: Token::Colon, span }),
             RawToken::Dot => Some(SpannedToken { token: Token::Dot, span }),
             RawToken::Bang => Some(SpannedToken { token: Token::Bang, span }),
+            RawToken::Question => Some(SpannedToken { token: Token::Question, span }),
+            RawToken::Apostrophe => Some(SpannedToken { token: Token::Apostrophe, span }),
+            RawToken::Semicolon => Some(SpannedToken { token: Token::Semicolon, span }),
+            RawToken::Minus => Some(SpannedToken { token: Token::Minus, span }),
             RawToken::Ge => Some(SpannedToken { token: Token::Ge, span }),
             RawToken::Le => Some(SpannedToken { token: Token::Le, span }),
             RawToken::EqEq => Some(SpannedToken { token: Token::EqEq, span }),

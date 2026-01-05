@@ -173,7 +173,9 @@ impl Playground {
             return empty();
         };
 
-        let mut runtime = Runtime::new(scene, self.handler.clone());
+        let Ok(mut runtime) = Runtime::new(scene, self.handler.clone()) else {
+            return empty();
+        };
         if runtime.jump_to(passage_name).is_err() {
             return empty();
         }
@@ -202,7 +204,8 @@ impl Playground {
             return Err(JsValue::from_str("Scene has ended"));
         }
 
-        let mut runtime = Runtime::new(scene, self.handler.clone());
+        let mut runtime = Runtime::new(scene, self.handler.clone())
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
 
         if let Some(name) = &self.passage_name {
             runtime

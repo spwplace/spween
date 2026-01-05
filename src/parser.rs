@@ -346,7 +346,7 @@ impl Parser {
                     flush_prose(&mut content, &mut prose_lines, &mut prose_start);
                     content.push(PassageContent::Choice(self.parse_choice()?));
                 }
-                Token::Identifier(_) => {
+                Token::Identifier(_) | Token::String(_) => {
                     if prose_start.is_none() {
                         prose_start = Some(self.current_span());
                     }
@@ -358,8 +358,12 @@ impl Parser {
                 Token::Newline => {
                     self.advance();
                 }
-                Token::EffectMarker | Token::Arrow => {
-                    // These shouldn't appear at passage level outside choices
+                Token::EffectMarker => {
+                    flush_prose(&mut content, &mut prose_lines, &mut prose_start);
+                    content.push(PassageContent::Effect(self.parse_effect()?));
+                }
+                Token::Arrow => {
+                    // Arrows shouldn't appear at passage level outside choices
                     break;
                 }
                 _ => {
@@ -381,6 +385,7 @@ impl Parser {
 
     fn collect_prose_line(&mut self) -> String {
         let mut result = String::new();
+        let mut prev_was_joining = false; // Track apostrophe/hyphen that joins words
 
         while !self.check(&Token::Newline)
             && !self.check(&Token::ChoiceMarker)
@@ -388,23 +393,29 @@ impl Parser {
             && !matches!(self.current_token(), Token::PassageHeader(_))
             && !self.is_at_end()
         {
-            let (part, is_punctuation) = match self.current_token() {
-                Token::Identifier(s) => (s.to_string(), false),
-                Token::Number(n) => (n.to_string(), false),
-                Token::String(s) => (format!("\"{}\"", s), false),
-                Token::Dot => (".".to_string(), true),
-                Token::Comma => (",".to_string(), true),
-                Token::Colon => (":".to_string(), true),
-                Token::Bang => ("!".to_string(), true),
-                _ => (String::new(), false),
+            let (part, is_punctuation, is_joining) = match self.current_token() {
+                Token::Identifier(s) => (s.to_string(), false, false),
+                Token::Number(n) => (n.to_string(), false, false),
+                Token::String(s) => (format!("\"{}\"", s), false, false),
+                Token::Dot => (".".to_string(), true, false),
+                Token::Comma => (",".to_string(), true, false),
+                Token::Colon => (":".to_string(), true, false),
+                Token::Bang => ("!".to_string(), true, false),
+                Token::Question => ("?".to_string(), true, false),
+                Token::Semicolon => (";".to_string(), true, false),
+                // Apostrophe and hyphen can join words (don't, self-aware)
+                Token::Apostrophe => ("'".to_string(), true, true),
+                Token::Minus => ("-".to_string(), true, true),
+                _ => (String::new(), false, false),
             };
             if !part.is_empty() {
-                // Don't add space before punctuation
-                if !result.is_empty() && !is_punctuation {
+                // Don't add space before punctuation OR after joining punctuation
+                if !result.is_empty() && !is_punctuation && !prev_was_joining {
                     result.push(' ');
                 }
                 result.push_str(&part);
             }
+            prev_was_joining = is_joining;
             self.advance();
         }
 
@@ -418,27 +429,37 @@ impl Parser {
         // Parse choice text: [text here]
         self.consume(&Token::LBracket, "Expected [ after *")?;
 
-        let mut text_parts = Vec::new();
+        let mut text_result = String::new();
+        let mut prev_was_joining = false;
+
         while !self.check(&Token::RBracket) && !self.is_at_end() {
             if self.check(&Token::Newline) {
                 break;
             }
-            let part = match self.current_token() {
-                Token::Identifier(s) => s.to_string(),
-                Token::Number(n) => n.to_string(),
-                Token::String(s) => s.to_string(),
-                Token::Dot => ".".to_string(),
-                Token::Comma => ",".to_string(),
-                Token::Colon => ":".to_string(),
-                Token::Bang => "!".to_string(),
-                _ => String::new(),
+            let (part, is_punctuation, is_joining) = match self.current_token() {
+                Token::Identifier(s) => (s.to_string(), false, false),
+                Token::Number(n) => (n.to_string(), false, false),
+                Token::String(s) => (s.to_string(), false, false),
+                Token::Dot => (".".to_string(), true, false),
+                Token::Comma => (",".to_string(), true, false),
+                Token::Colon => (":".to_string(), true, false),
+                Token::Bang => ("!".to_string(), true, false),
+                Token::Question => ("?".to_string(), true, false),
+                Token::Semicolon => (";".to_string(), true, false),
+                Token::Apostrophe => ("'".to_string(), true, true),
+                Token::Minus => ("-".to_string(), true, true),
+                _ => (String::new(), false, false),
             };
             if !part.is_empty() {
-                text_parts.push(part);
+                if !text_result.is_empty() && !is_punctuation && !prev_was_joining {
+                    text_result.push(' ');
+                }
+                text_result.push_str(&part);
             }
+            prev_was_joining = is_joining;
             self.advance();
         }
-        let text = SmolStr::new(&text_parts.join(" "));
+        let text = SmolStr::new(&text_result);
         self.consume(&Token::RBracket, "Expected ] to close choice text")?;
 
         // Optional condition: { ... } or `when <expr>`
@@ -1037,6 +1058,48 @@ Test passage.
             }
         } else {
             panic!("Expected choice");
+        }
+    }
+
+    #[test]
+    fn test_prose_with_punctuation() {
+        let source = r#"---
+id: punct_test
+title: Punctuation Test
+weight: 10
+cooldown: 5
+---
+
+=== intro
+
+"What's your name?" she asked.
+Don't worry; it'll be fine - trust me!
+
+* [Continue]
+  -> END
+"#;
+
+        let result = parse(source, "test.scene");
+        assert!(result.is_ok(), "Parse failed: {:?}", result.err());
+
+        let scene = result.unwrap();
+        let passage = &scene.passages[0];
+
+        // First content should be prose
+        if let PassageContent::Prose(prose) = &passage.content[0] {
+            let text = prose.text.as_str();
+            // Check quoted dialogue is preserved
+            assert!(text.contains("\"What's your name?\""), "Missing quoted dialogue: {}", text);
+            // Check apostrophe in contraction
+            assert!(text.contains("Don't"), "Missing apostrophe in Don't: {}", text);
+            // Check semicolon
+            assert!(text.contains(";"), "Missing semicolon: {}", text);
+            // Check question mark
+            assert!(text.contains("?"), "Missing question mark: {}", text);
+            // Check hyphen
+            assert!(text.contains("-"), "Missing hyphen: {}", text);
+        } else {
+            panic!("Expected prose as first content");
         }
     }
 }
