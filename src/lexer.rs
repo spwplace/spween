@@ -195,10 +195,8 @@ pub struct SpannedToken {
 pub struct Lexer<'src> {
     source: &'src str,
     inner: SpannedIter<'src, RawToken>,
-    peeked: Option<Option<(Result<RawToken, ()>, Range<usize>)>>,
     indent_stack: Vec<usize>,
     pending_dedents: usize,
-    at_line_start: bool,
     in_frontmatter: bool,
     pos: usize,
 }
@@ -209,27 +207,15 @@ impl<'src> Lexer<'src> {
         Self {
             source,
             inner: RawToken::lexer(source).spanned(),
-            peeked: None,
             indent_stack: vec![0],
             pending_dedents: 0,
-            at_line_start: true,
             in_frontmatter: false,
             pos: 0,
         }
     }
 
-    fn peek_raw(&mut self) -> Option<&(Result<RawToken, ()>, Range<usize>)> {
-        if self.peeked.is_none() {
-            self.peeked = Some(self.inner.next());
-        }
-        self.peeked.as_ref().and_then(|x| x.as_ref())
-    }
-
     fn next_raw(&mut self) -> Option<(Result<RawToken, ()>, Range<usize>)> {
-        match self.peeked.take() {
-            Some(item) => item,
-            None => self.inner.next(),
-        }
+        self.inner.next()
     }
 
     fn measure_indent_at(&self, pos: usize) -> usize {
@@ -244,17 +230,7 @@ impl<'src> Lexer<'src> {
         indent
     }
 
-    fn skip_whitespace_on_line(&mut self) {
-        while let Some(&(Ok(ref tok), _)) = self.peek_raw() {
-            if matches!(tok, RawToken::Newline) {
-                break;
-            }
-            break;
-        }
-    }
-
     fn read_passage_name(&mut self) -> SmolStr {
-        self.skip_whitespace_on_line();
         if let Some((Ok(RawToken::Identifier(name)), _)) = self.next_raw() {
             SmolStr::new(&name)
         } else {
@@ -320,8 +296,6 @@ impl Iterator for Lexer<'_> {
             }),
 
             RawToken::Newline => {
-                self.at_line_start = true;
-
                 // Handle indentation
                 let indent = self.measure_indent_at(span.end);
                 let current_indent = *self.indent_stack.last().unwrap_or(&0);
@@ -375,13 +349,10 @@ impl Iterator for Lexer<'_> {
                 span,
             }),
 
-            RawToken::Identifier(s) => {
-                self.at_line_start = false;
-                Some(SpannedToken {
-                    token: Token::Identifier(SmolStr::new(&s)),
-                    span,
-                })
-            }
+            RawToken::Identifier(s) => Some(SpannedToken {
+                token: Token::Identifier(SmolStr::new(&s)),
+                span,
+            }),
 
             RawToken::LBracket => Some(SpannedToken { token: Token::LBracket, span }),
             RawToken::RBracket => Some(SpannedToken { token: Token::RBracket, span }),

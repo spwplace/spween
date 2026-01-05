@@ -7,7 +7,7 @@ use wasm_bindgen::prelude::*;
 use spween::{parse, EffectHandler, Runtime, Scene, Value};
 
 /// Simple effect handler that stores state in HashMaps.
-#[derive(Default, Clone)]
+#[derive(Debug, Default, Clone)]
 struct PlaygroundHandler {
     vars: HashMap<String, Value>,
     has_items: HashMap<String, HashSet<String>>,
@@ -98,7 +98,6 @@ impl Playground {
             .as_ref()
             .ok_or_else(|| JsValue::from_str("No scene loaded"))?;
 
-        // Reset handler state
         self.handler = PlaygroundHandler::default();
         self.ended = scene.passages.is_empty();
         self.passage_name = scene.passages.first().map(|p| p.name.to_string());
@@ -108,7 +107,6 @@ impl Playground {
 
     /// Set a variable value before starting.
     pub fn set_var(&mut self, name: &str, value: &str) {
-        // Try to parse as different types
         let v = if value == "true" {
             Value::Bool(true)
         } else if value == "false" {
@@ -138,8 +136,10 @@ impl Playground {
     pub fn get_prose(&self) -> Option<String> {
         let scene = self.scene.as_ref()?;
         let passage_name = self.passage_name.as_ref()?;
-
-        let passage = scene.passages.iter().find(|p| p.name.as_str() == passage_name)?;
+        let passage = scene
+            .passages
+            .iter()
+            .find(|p| p.name.as_str() == passage_name)?;
 
         let prose: Vec<&str> = passage
             .content
@@ -164,20 +164,19 @@ impl Playground {
 
     /// Get available choices as JSON.
     pub fn get_choices(&self) -> JsValue {
+        let empty = || serde_wasm_bindgen::to_value(&Vec::<JsChoice>::new()).unwrap();
+
         let Some(scene) = &self.scene else {
-            return serde_wasm_bindgen::to_value(&Vec::<JsChoice>::new()).unwrap();
+            return empty();
         };
-
         let Some(passage_name) = &self.passage_name else {
-            return serde_wasm_bindgen::to_value(&Vec::<JsChoice>::new()).unwrap();
+            return empty();
         };
 
-        let Some(_passage) = scene.passages.iter().find(|p| p.name.as_str() == passage_name) else {
-            return serde_wasm_bindgen::to_value(&Vec::<JsChoice>::new()).unwrap();
-        };
-
-        // Create a temporary runtime just to evaluate conditions
-        let runtime = Runtime::new(scene, self.handler.clone());
+        let mut runtime = Runtime::new(scene, self.handler.clone());
+        if runtime.jump_to(passage_name).is_err() {
+            return empty();
+        }
 
         let choices: Vec<JsChoice> = runtime
             .current_choices()
@@ -203,37 +202,22 @@ impl Playground {
             return Err(JsValue::from_str("Scene has ended"));
         }
 
-        // Create runtime, select choice, extract new state
         let mut runtime = Runtime::new(scene, self.handler.clone());
 
-        // Jump to current passage first
         if let Some(name) = &self.passage_name {
-            if let Err(e) = runtime.jump_to(name) {
-                return Err(JsValue::from_str(&e.to_string()));
-            }
+            runtime
+                .jump_to(name)
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
         }
 
-        // Select the choice
-        if let Err(e) = runtime.select_choice(index) {
-            return Err(JsValue::from_str(&e.to_string()));
-        }
+        runtime
+            .select_choice(index)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
 
-        // Extract new state
+        // Extract state from runtime before consuming it
+        self.ended = runtime.is_ended();
+        self.passage_name = runtime.current_passage().map(|p| p.name.to_string());
         self.handler = runtime.into_handler();
-        self.ended = runtime_ended_after_select(scene, &self.handler, self.passage_name.as_deref(), index);
-
-        // Update passage
-        if let Some((new_passage, is_end)) = get_target_after_select(scene, self.passage_name.as_deref(), index) {
-            if is_end {
-                self.passage_name = None;
-                self.ended = true;
-            } else {
-                self.passage_name = Some(new_passage);
-            }
-        } else {
-            self.ended = true;
-            self.passage_name = None;
-        }
 
         Ok(())
     }
@@ -291,62 +275,4 @@ impl Default for Playground {
     fn default() -> Self {
         Self::new()
     }
-}
-
-/// Helper to check if scene ended after a choice.
-fn runtime_ended_after_select(
-    scene: &Scene,
-    _handler: &PlaygroundHandler,
-    passage_name: Option<&str>,
-    choice_index: usize,
-) -> bool {
-    let Some(name) = passage_name else {
-        return true;
-    };
-
-    let Some(passage) = scene.passages.iter().find(|p| p.name.as_str() == name) else {
-        return true;
-    };
-
-    let choices: Vec<_> = passage
-        .content
-        .iter()
-        .filter_map(|c| match c {
-            spween::PassageContent::Choice(choice) => Some(choice),
-            _ => None,
-        })
-        .collect();
-
-    let Some(choice) = choices.get(choice_index) else {
-        return true;
-    };
-
-    match &choice.target {
-        Some(nav) => nav.is_end,
-        None => true,
-    }
-}
-
-/// Helper to get target passage after a choice.
-fn get_target_after_select(
-    scene: &Scene,
-    passage_name: Option<&str>,
-    choice_index: usize,
-) -> Option<(String, bool)> {
-    let name = passage_name?;
-    let passage = scene.passages.iter().find(|p| p.name.as_str() == name)?;
-
-    let choices: Vec<_> = passage
-        .content
-        .iter()
-        .filter_map(|c| match c {
-            spween::PassageContent::Choice(choice) => Some(choice),
-            _ => None,
-        })
-        .collect();
-
-    let choice = choices.get(choice_index)?;
-    let nav = choice.target.as_ref()?;
-
-    Some((nav.target.to_string(), nav.is_end))
 }

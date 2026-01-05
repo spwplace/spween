@@ -16,19 +16,16 @@ pub struct Parser {
     source: String,
     tokens: Vec<SpannedToken>,
     pos: usize,
-    #[allow(dead_code)]
-    filename: SmolStr,
 }
 
 impl Parser {
     /// Create a new parser for the given source.
-    pub fn new(source: &str, filename: &str) -> Self {
+    pub fn new(source: &str, _filename: &str) -> Self {
         let tokens = lex(source);
         Self {
             source: source.to_string(),
             tokens,
             pos: 0,
-            filename: SmolStr::new(filename),
         }
     }
 
