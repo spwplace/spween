@@ -1,0 +1,143 @@
+---
+id: combat_encounter
+title: The Forest Ambush
+weight: 10
+cooldown: 5
+---
+
+=== intro
+
+Bandits emerge from the treeline, weapons drawn.
+Their leader sneers at you.
+
+"Your gold or your life, traveler!"
+
+~ enemy_health = 30
+~ combat_started = true
+
+* [Draw your weapon] { has_weapon }
+  -> fight
+
+* [Try to negotiate]
+  -> negotiate
+
+* [Attempt to flee] { agility >= 10 }
+  -> flee
+
+* [Surrender]
+  ~ gold = 0
+  ~ surrendered = true
+  -> END
+
+=== fight
+
+You draw your blade and take a fighting stance.
+The bandits spread out to surround you.
+
+* [Attack the leader]
+  ~ damage_dealt = 15
+  ~ enemy_health -= 15
+  -> attack_result
+
+* [Defend and wait]
+  ~ defensive_stance = true
+  -> defend
+
+* [Use a special move] { special_moves >= 1 }
+  ~ special_moves -= 1
+  ~ damage_dealt = 25
+  ~ enemy_health -= 25
+  -> attack_result
+
+=== attack_result
+
+Your strike lands true!
+
+* [Continue fighting] { enemy_health > 0 }
+  -> fight
+
+* [They're defeated] { enemy_health <= 0 }
+  ~ bandits_defeated = true
+  ~ gold += 25
+  ~ reputation += 2
+  -> victory
+
+=== defend
+
+You raise your guard. The bandit's attack glances off.
+
+* [Counter-attack]
+  ~ damage_dealt = 20
+  ~ enemy_health -= 20
+  -> attack_result
+
+* [Continue defending]
+  -> defend
+
+=== negotiate
+
+"Perhaps we can reach an agreement," you say calmly.
+
+* [Offer half your gold] { gold >= 20 }
+  ~ gold -= 10
+  ~ negotiated = true
+  -> END
+
+* [Bluff about reinforcements] { charisma >= 12 }
+  ~ bluff_success = true
+  -> bluff
+
+* [They're not interested]
+  -> fight
+
+=== bluff
+
+"My companions are just behind me. You're outnumbered."
+
+The bandits exchange nervous glances.
+Their leader curses and signals a retreat.
+
+~ reputation += 1
+
+* [Let them go]
+  -> END
+
+* [Attack while they're distracted] { has_weapon }
+  ~ damage_dealt = 20
+  ~ enemy_health -= 20
+  ~ honorable = false
+  -> attack_result
+
+=== flee
+
+You sprint into the underbrush.
+Branches whip at your face as you run.
+
+* [Keep running]
+  ~ escaped = true
+  ~ stamina -= 5
+  -> END
+
+* [Circle back to ambush them] { agility >= 14 }
+  ~ flanked = true
+  ~ damage_dealt = 25
+  ~ enemy_health -= 25
+  -> attack_result
+
+=== victory
+
+The bandits lie defeated.
+You search their camp and find some supplies.
+
+~ combat_won = true
+~ notify "combat_complete"
+
+* [Take their gear]
+  ~ looted = true
+  ~ gold += 15
+  -> END
+
+* [Leave them]
+  ~ merciful = true
+  ~ karma += 3
+  -> END

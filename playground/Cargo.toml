@@ -1,0 +1,15 @@
+[package]
+name = "spween-playground"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Web playground for spween DSL"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+spween = { path = ".." }
+wasm-bindgen.workspace = true
+serde-wasm-bindgen.workspace = true
+serde.workspace = true

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spween Playground</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app">
+        <header class="header">
+            <h1 class="logo">spween</h1>
+            <div class="controls">
+                <select id="example-select" aria-label="Select example">
+                    <option value="">-- Select Example --</option>
+                    <option value="tavern">Tavern Encounter</option>
+                    <option value="treasure">Treasure Hunt</option>
+                    <option value="combat">Combat Encounter</option>
+                </select>
+                <button id="run-btn" class="btn btn-primary">Run</button>
+            </div>
+        </header>
+
+        <nav class="tabs" role="tablist">
+            <button class="tab active" role="tab" aria-selected="true" data-tab="editor">Edit</button>
+            <button class="tab" role="tab" aria-selected="false" data-tab="runner">Play</button>
+        </nav>
+
+        <main class="main">
+            <section id="editor-panel" class="panel editor-panel active" role="tabpanel">
+                <textarea
+                    id="editor"
+                    class="editor"
+                    spellcheck="false"
+                    placeholder="Write your spween scene here..."
+                    aria-label="Scene editor"
+                ></textarea>
+                <div id="parse-error" class="error" hidden></div>
+            </section>
+
+            <section id="runner-panel" class="panel runner-panel" role="tabpanel" hidden>
+                <div id="runner-content" class="runner-content">
+                    <div id="scene-title" class="scene-title"></div>
+                    <div id="passage-name" class="passage-name"></div>
+                    <div id="prose" class="prose"></div>
+                    <div id="choices" class="choices"></div>
+                    <div id="ended-message" class="ended-message" hidden>
+                        <p>Scene ended.</p>
+                        <button id="restart-btn" class="btn btn-secondary">Restart</button>
+                    </div>
+                </div>
+
+                <details class="state-panel">
+                    <summary>Variables & Calls</summary>
+                    <div class="state-content">
+                        <div class="state-section">
+                            <h3>Variables</h3>
+                            <div id="variables" class="variables"></div>
+                        </div>
+                        <div class="state-section">
+                            <h3>Effect Calls</h3>
+                            <div id="calls" class="calls"></div>
+                        </div>
+                    </div>
+                </details>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <a href="https://github.com/your-repo/spween" target="_blank" rel="noopener">GitHub</a>
+            <span class="separator">|</span>
+            <a href="docs/02-dsl-syntax.html" target="_blank" rel="noopener">Syntax Reference</a>
+        </footer>
+    </div>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>

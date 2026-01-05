@@ -1,0 +1,35 @@
+[workspace]
+members = [".", "playground"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[workspace.dependencies]
+logos = "0.15"
+smol_str = "0.3"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+wasm-bindgen = "0.2"
+serde-wasm-bindgen = "0.6"
+
+[package]
+name = "spween"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "A game-agnostic DSL for narrative/choice-based content"
+
+[dependencies]
+logos.workspace = true
+smol_str.workspace = true
+thiserror.workspace = true
+serde = { workspace = true, optional = true }
+serde_yaml.workspace = true
+
+[features]
+default = []
+serde = ["dep:serde", "smol_str/serde"]

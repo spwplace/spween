@@ -1,0 +1,120 @@
+---
+id: treasure_hunt
+title: The Hidden Treasure
+weight: 10
+cooldown: 5
+---
+
+=== intro
+
+You stand before an ancient stone door covered in runes.
+A puzzle mechanism awaits your input.
+
+Your torch flickers in the dusty air.
+
+* [Examine the runes] { intelligence >= 8 }
+  ~ examined_runes = true
+  -> examine
+
+* [Try to force the door] { strength >= 12 }
+  ~ strength -= 2
+  -> force
+
+* [Search for another way]
+  -> search
+
+=== examine
+
+The runes describe a sequence: sun, moon, star.
+Three symbols are carved into buttons on the door.
+
+* [Press sun, moon, star]
+  ~ solved_puzzle = true
+  -> success
+
+* [Press moon, star, sun]
+  ~ trap_triggered = true
+  ~ health -= 10
+  -> trap
+
+* [Press randomly]
+  ~ trap_triggered = true
+  ~ health -= 15
+  -> trap
+
+=== force
+
+You throw your weight against the door.
+It groans but doesn't budge.
+
+* [Try again] { strength >= 10 }
+  ~ strength -= 2
+  -> force_success
+
+* [Give up and examine the runes] { intelligence >= 6 }
+  -> examine
+
+* [Leave]
+  -> END
+
+=== force_success
+
+With a tremendous crash, the door gives way!
+Stone dust fills the air.
+
+~ door_forced = true
+
+* [Enter carefully]
+  -> treasure
+
+=== search
+
+You search the walls for hidden passages.
+Behind a loose stone, you find a rusty lever.
+
+* [Pull the lever]
+  ~ secret_found = true
+  -> success
+
+* [Ignore it and try the door]
+  -> intro
+
+=== trap
+
+Poison darts shoot from the walls!
+You barely dodge in time.
+
+* [Try again more carefully]
+  -> examine
+
+* [Retreat]
+  -> END
+
+=== success
+
+The door slides open with a grinding sound.
+Ancient air rushes past you.
+
+* [Enter]
+  -> treasure
+
+=== treasure
+
+Inside, golden coins spill from rotted chests.
+Jeweled artifacts line the walls.
+
+You've found the legendary treasure!
+
+~ gold += 1000
+~ treasure_found = true
+~ notify "achievement_unlocked"
+
+* [Collect everything]
+  ~ greedy = true
+  ~ gold += 500
+  -> END
+
+* [Take only what you need]
+  ~ gold += 200
+  ~ karma += 5
+  -> END

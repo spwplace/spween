@@ -1,0 +1,78 @@
+---
+id: tavern_encounter
+title: The Mysterious Stranger
+weight: 10
+cooldown: 5
+---
+
+=== intro
+
+A hooded figure sits alone in the corner of the tavern.
+They gesture for you to approach.
+
+* [Approach cautiously] { perception >= 10 }
+  ~ perception_used = true
+  -> cautious
+
+* [Approach boldly]
+  -> bold
+
+* [Ignore them]
+  ~ reputation -= 1
+  -> END
+
+=== cautious
+
+You notice a glint of steel beneath their cloak. A weapon,
+but kept hidden. They mean no immediate harm.
+
+The stranger nods approvingly.
+
+* [Sit down]
+  ~ stranger_trust += 2
+  -> conversation
+
+* [Keep your distance]
+  ~ stranger_trust += 1
+  -> conversation
+
+=== bold
+
+You stride over confidently. The stranger seems amused
+by your directness.
+
+* [Sit down]
+  ~ stranger_trust += 1
+  -> conversation
+
+=== conversation
+
+The stranger leans close and whispers.
+
+"I have information about the artifact you seek.
+But nothing in this world is free."
+
+* [Offer gold] { gold >= 50 }
+  ~ gold -= 50
+  ~ has_info = true
+  -> reward
+
+* [Offer a favor]
+  ~ owes_favor = true
+  ~ has_info = true
+  -> reward
+
+* [Decline and leave]
+  -> END
+
+=== reward
+
+The stranger slides a worn map across the table.
+
+"The tomb lies three days east, past the Darkwood.
+Be warned: you are not the only one seeking it."
+
+~ notify "quest_updated"
+
+* [Thank them and leave]
+  -> END
