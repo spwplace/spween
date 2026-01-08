@@ -96,6 +96,12 @@ pub enum RawToken {
     #[token("=")]
     Eq,
 
+    #[token("&&")]
+    AndAnd,
+
+    #[token("||")]
+    OrOr,
+
     #[regex(r"-?[0-9]+(\.[0-9]+)?", |lex| lex.slice().to_string())]
     Number(String),
 
@@ -149,6 +155,8 @@ pub enum Token {
     PlusEq,
     MinusEq,
     Eq,
+    AndAnd,
+    OrOr,
     Number(i64),
     Float(f64),
     String(SmolStr),
@@ -191,6 +199,8 @@ impl std::fmt::Display for Token {
             Token::PlusEq => write!(f, "+="),
             Token::MinusEq => write!(f, "-="),
             Token::Eq => write!(f, "="),
+            Token::AndAnd => write!(f, "&&"),
+            Token::OrOr => write!(f, "||"),
             Token::Number(n) => write!(f, "{}", n),
             Token::Float(n) => write!(f, "{}", n),
             Token::String(s) => write!(f, "\"{}\"", s),
@@ -392,6 +402,8 @@ impl Iterator for Lexer<'_> {
             RawToken::PlusEq => Some(SpannedToken { token: Token::PlusEq, span }),
             RawToken::MinusEq => Some(SpannedToken { token: Token::MinusEq, span }),
             RawToken::Eq => Some(SpannedToken { token: Token::Eq, span }),
+            RawToken::AndAnd => Some(SpannedToken { token: Token::AndAnd, span }),
+            RawToken::OrOr => Some(SpannedToken { token: Token::OrOr, span }),
             RawToken::When => Some(SpannedToken { token: Token::When, span }),
             RawToken::Comment => self.next(),
         }

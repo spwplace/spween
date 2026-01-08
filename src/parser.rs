@@ -293,8 +293,29 @@ impl Parser {
             }
         }
 
+        // Convert clauses into a condition expression (all ANDed together)
+        let expr = if clauses.is_empty() {
+            // Empty condition - always true (use a dummy atom)
+            ConditionExpr::Atom(ConditionClause::Compare(CompareClause {
+                var: SmolStr::new("_always_true"),
+                op: CompareOp::Eq,
+                value: Value::Bool(true),
+                span: span.clone(),
+            }))
+        } else if clauses.len() == 1 {
+            ConditionExpr::Atom(clauses.into_iter().next().unwrap())
+        } else {
+            // Chain clauses with AND
+            let mut iter = clauses.into_iter();
+            let mut expr = ConditionExpr::Atom(iter.next().unwrap());
+            for clause in iter {
+                expr = ConditionExpr::And(Box::new(expr), Box::new(ConditionExpr::Atom(clause)));
+            }
+            expr
+        };
+
         Condition {
-            clauses,
+            expr,
             span: span.clone(),
         }
     }
@@ -519,25 +540,46 @@ impl Parser {
         let start_span = self.current_span();
         self.consume(&Token::LBrace, "Expected {")?;
 
-        let mut clauses = Vec::new();
-
-        while !self.check(&Token::RBrace) && !self.is_at_end() {
-            clauses.push(self.parse_condition_clause()?);
-
-            if self.check(&Token::Comma) {
-                self.advance();
-            } else {
-                break;
-            }
-        }
+        let expr = self.parse_condition_or()?;
 
         let end_span = self.current_span();
         self.consume(&Token::RBrace, "Expected }")?;
 
         Ok(Condition {
-            clauses,
+            expr,
             span: start_span.start..end_span.end,
         })
+    }
+
+    /// Parse OR expression (lowest precedence)
+    fn parse_condition_or(&mut self) -> Result<ConditionExpr, ParseError> {
+        let mut left = self.parse_condition_and()?;
+
+        while self.match_token(&Token::OrOr) {
+            let right = self.parse_condition_and()?;
+            left = ConditionExpr::Or(Box::new(left), Box::new(right));
+        }
+
+        Ok(left)
+    }
+
+    /// Parse AND expression (higher precedence than OR)
+    fn parse_condition_and(&mut self) -> Result<ConditionExpr, ParseError> {
+        let mut left = self.parse_condition_atom()?;
+
+        while self.match_token(&Token::AndAnd) || self.match_token(&Token::Comma) {
+            // Both '&&' and ',' mean AND for backwards compatibility
+            let right = self.parse_condition_atom()?;
+            left = ConditionExpr::And(Box::new(left), Box::new(right));
+        }
+
+        Ok(left)
+    }
+
+    /// Parse atomic condition (a single clause)
+    fn parse_condition_atom(&mut self) -> Result<ConditionExpr, ParseError> {
+        let clause = self.parse_condition_clause()?;
+        Ok(ConditionExpr::Atom(clause))
     }
 
     fn parse_condition_clause(&mut self) -> Result<ConditionClause, ParseError> {
@@ -874,8 +916,29 @@ impl Parser {
             }
         }
 
+        // Convert clauses into a condition expression (all ANDed together)
+        let expr = if clauses.is_empty() {
+            // Empty condition - always true
+            ConditionExpr::Atom(ConditionClause::Compare(CompareClause {
+                var: SmolStr::new("_always_true"),
+                op: CompareOp::Eq,
+                value: Value::Bool(true),
+                span: start_span.clone(),
+            }))
+        } else if clauses.len() == 1 {
+            ConditionExpr::Atom(clauses.into_iter().next().unwrap())
+        } else {
+            // Chain clauses with AND
+            let mut iter = clauses.into_iter();
+            let mut expr = ConditionExpr::Atom(iter.next().unwrap());
+            for clause in iter {
+                expr = ConditionExpr::And(Box::new(expr), Box::new(ConditionExpr::Atom(clause)));
+            }
+            expr
+        };
+
         Ok(Condition {
-            clauses,
+            expr,
             span: start_span.start..self.current_span().start,
         })
     }
@@ -969,13 +1032,13 @@ Test passage.
         if let PassageContent::Choice(choice) = &passage.content[1] {
             assert!(choice.condition.is_some());
             let condition = choice.condition.as_ref().unwrap();
-            assert_eq!(condition.clauses.len(), 1);
 
-            if let ConditionClause::Has(has) = &condition.clauses[0] {
+            // Check that it's an Atom with Has clause
+            if let ConditionExpr::Atom(ConditionClause::Has(has)) = &condition.expr {
                 assert_eq!(has.category.as_str(), "inventory");
                 assert_eq!(has.key.as_str(), "sword");
             } else {
-                panic!("Expected Has condition");
+                panic!("Expected Atom(Has(...)) condition, got {:?}", condition.expr);
             }
         } else {
             panic!("Expected choice");
@@ -1047,14 +1110,81 @@ Test passage.
         if let PassageContent::Choice(choice) = &passage.content[1] {
             assert!(choice.condition.is_some());
             let condition = choice.condition.as_ref().unwrap();
-            assert_eq!(condition.clauses.len(), 1);
 
-            if let ConditionClause::Compare(cmp) = &condition.clauses[0] {
+            // Check that it's an Atom with Compare clause
+            if let ConditionExpr::Atom(ConditionClause::Compare(cmp)) = &condition.expr {
                 assert_eq!(cmp.var.as_str(), "gold");
                 assert_eq!(cmp.op, CompareOp::Ge);
                 assert_eq!(cmp.value, Value::Int(100));
             } else {
-                panic!("Expected Compare condition");
+                panic!("Expected Atom(Compare(...)) condition, got {:?}", condition.expr);
+            }
+        } else {
+            panic!("Expected choice");
+        }
+    }
+
+    #[test]
+    fn test_parse_and_or_conditions() {
+        let source = r#"---
+id: logic_test
+title: Logic Test
+tags: []
+weight: 10
+cooldown: 5
+---
+
+=== intro
+
+Test passage.
+
+* [Complex condition] { gold >= 100 && inventory.sword || magic_power > 5 }
+  -> END
+"#;
+
+        let result = parse(source, "test.scene");
+        assert!(result.is_ok(), "Parse failed: {:?}", result.err());
+
+        let scene = result.unwrap();
+        let passage = &scene.passages[0];
+
+        if let PassageContent::Choice(choice) = &passage.content[1] {
+            assert!(choice.condition.is_some());
+            let condition = choice.condition.as_ref().unwrap();
+
+            // Should be: (gold >= 100 AND inventory.sword) OR magic_power > 5
+            // Because AND has higher precedence than OR
+            if let ConditionExpr::Or(left, right) = &condition.expr {
+                // Left side should be AND
+                if let ConditionExpr::And(left_left, left_right) = &**left {
+                    // Left-left should be gold >= 100
+                    if let ConditionExpr::Atom(ConditionClause::Compare(cmp)) = &**left_left {
+                        assert_eq!(cmp.var.as_str(), "gold");
+                        assert_eq!(cmp.op, CompareOp::Ge);
+                    } else {
+                        panic!("Expected Compare for gold");
+                    }
+
+                    // Left-right should be inventory.sword
+                    if let ConditionExpr::Atom(ConditionClause::Has(has)) = &**left_right {
+                        assert_eq!(has.category.as_str(), "inventory");
+                        assert_eq!(has.key.as_str(), "sword");
+                    } else {
+                        panic!("Expected Has for inventory.sword");
+                    }
+                } else {
+                    panic!("Expected And on left side of Or");
+                }
+
+                // Right side should be magic_power > 5
+                if let ConditionExpr::Atom(ConditionClause::Compare(cmp)) = &**right {
+                    assert_eq!(cmp.var.as_str(), "magic_power");
+                    assert_eq!(cmp.op, CompareOp::Gt);
+                } else {
+                    panic!("Expected Compare for magic_power");
+                }
+            } else {
+                panic!("Expected Or at root, got {:?}", condition.expr);
             }
         } else {
             panic!("Expected choice");

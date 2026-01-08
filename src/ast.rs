@@ -107,13 +107,24 @@ pub struct NavigationTarget {
 // Conditions
 // ============================================================================
 
-/// A condition (multiple clauses ANDed together).
+/// A condition expression.
 #[derive(Debug, Clone)]
 pub struct Condition {
-    /// Clauses that must all be true
-    pub clauses: Vec<ConditionClause>,
+    /// The root condition expression
+    pub expr: ConditionExpr,
     /// Source span
     pub span: Span,
+}
+
+/// A condition expression (supports AND/OR operations).
+#[derive(Debug, Clone)]
+pub enum ConditionExpr {
+    /// A single clause
+    Atom(ConditionClause),
+    /// AND operation - both must be true
+    And(Box<ConditionExpr>, Box<ConditionExpr>),
+    /// OR operation - either can be true
+    Or(Box<ConditionExpr>, Box<ConditionExpr>),
 }
 
 /// A single clause in a condition.

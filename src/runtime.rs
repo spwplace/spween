@@ -347,8 +347,20 @@ impl<'scene, H: EffectHandler> Runtime<'scene, H> {
             return true;
         };
 
-        // All clauses must be true (AND)
-        cond.clauses.iter().all(|clause| self.evaluate_clause(clause))
+        self.evaluate_condition_expr(&cond.expr)
+    }
+
+    /// Evaluate a condition expression.
+    fn evaluate_condition_expr(&self, expr: &ConditionExpr) -> bool {
+        match expr {
+            ConditionExpr::Atom(clause) => self.evaluate_clause(clause),
+            ConditionExpr::And(left, right) => {
+                self.evaluate_condition_expr(left) && self.evaluate_condition_expr(right)
+            }
+            ConditionExpr::Or(left, right) => {
+                self.evaluate_condition_expr(left) || self.evaluate_condition_expr(right)
+            }
+        }
     }
 
     /// Evaluate a single condition clause.
