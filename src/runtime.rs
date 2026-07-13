@@ -88,8 +88,13 @@ pub struct Runtime<'scene, H: EffectHandler> {
     handler: H,
     state: RuntimeState,
     passage_index: std::collections::HashMap<SmolStr, usize>,
-    /// Tracks which passage index we've executed entry effects for (to avoid re-running)
-    effects_executed_for: Option<usize>,
+    /// The set of passage indices whose entry (passage-level) effects have already
+    /// run. Entry effects fire exactly ONCE per passage, the first time it is
+    /// entered — a re-entry (a self-loop, or a retreat A→B→A) does NOT re-run them,
+    /// so a seeding passage cannot re-seed state (e.g. refill a purse) on every
+    /// return. A single-slot "last passage" memory was insufficient: it suppressed
+    /// only the immediate self-loop and re-ran the effects on any retreat.
+    effects_executed: std::collections::HashSet<usize>,
 }
 
 impl<'scene, H: EffectHandler> Runtime<'scene, H> {
@@ -114,7 +119,7 @@ impl<'scene, H: EffectHandler> Runtime<'scene, H> {
                 RuntimeState::Running(0)
             },
             passage_index,
-            effects_executed_for: None,
+            effects_executed: std::collections::HashSet::new(),
         };
 
         // Execute entry effects for the initial passage
@@ -156,13 +161,12 @@ impl<'scene, H: EffectHandler> Runtime<'scene, H> {
             return Ok(());
         };
 
-        // Skip if we've already executed effects for this passage
-        if self.effects_executed_for == Some(idx) {
+        // Skip if this passage's entry effects have already run — once per passage,
+        // ever. Re-entry (self-loop or retreat) must not re-run/re-seed them.
+        // `insert` returns false when the index was already present.
+        if !self.effects_executed.insert(idx) {
             return Ok(());
         }
-
-        // Mark as executed before running (to prevent infinite loops if effects cause issues)
-        self.effects_executed_for = Some(idx);
 
         // Collect effects to execute
         let effects: Vec<Effect> = self
@@ -690,6 +694,69 @@ You're in the middle.
 
         runtime.select_choice(0).unwrap();
         assert!(runtime.is_ended());
+    }
+
+    #[test]
+    fn passage_entry_effects_run_once_no_reseed_on_reentry() {
+        // `shop` seeds a purse on entry. Spend, walk out to `alley`, then walk BACK
+        // into `shop` — the `~ gold = 100` entry seed must NOT re-run (a refill
+        // glitch). Entry effects fire exactly once per passage, ever. Under the old
+        // single-slot memory this retreat re-seeded the purse.
+        let scene = parse_test_scene(
+            r#"---
+id: reentry
+title: Reentry
+weight: 10
+cooldown: 5
+---
+
+=== shop
+
+~ gold = 100
+
+You stand in the shop.
+
+* [Spend forty]
+  ~ gold -= 40
+  -> alley
+
+* [Buy out]
+  -> END
+
+=== alley
+
+A dead-end alley.
+
+* [Walk back into the shop]
+  -> shop
+"#,
+        );
+
+        let handler = TestHandler::new();
+        let mut runtime = Runtime::new(&scene, handler).unwrap();
+
+        // The entry seed ran once.
+        assert_eq!(runtime.handler().get_var("gold"), Value::Int(100));
+
+        // Spend forty (gold 100 → 60), navigate to the alley.
+        runtime.select_choice(0).unwrap();
+        assert_eq!(runtime.handler().get_var("gold"), Value::Int(60));
+        assert_eq!(
+            runtime.current_passage().map(|p| p.name.as_str()),
+            Some("alley")
+        );
+
+        // Walk BACK into the shop — a genuine re-entry. The seed must not re-run.
+        runtime.select_choice(0).unwrap();
+        assert_eq!(
+            runtime.current_passage().map(|p| p.name.as_str()),
+            Some("shop")
+        );
+        assert_eq!(
+            runtime.handler().get_var("gold"),
+            Value::Int(60),
+            "re-entering `shop` must NOT re-seed the purse to 100"
+        );
     }
 
     #[test]
